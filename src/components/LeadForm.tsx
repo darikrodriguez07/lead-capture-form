@@ -87,6 +87,7 @@ const LeadForm = () => {
 
       toast.success("¡Formulario enviado con éxito! Nos pondremos en contacto contigo pronto.");
       setForm(initialForm);
+      window.location.href = "https://calendly.com/nexainmointelligence/30min";
     } catch {
       toast.error("Hubo un error al enviar el formulario. Inténtalo de nuevo.");
     } finally {
