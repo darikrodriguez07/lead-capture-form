@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,20 +18,19 @@ import { cn } from "@/lib/utils";
    CONFIG
    ────────────────────────────────────────────── */
 const WEBHOOK_URL = "https://dariikk.app.n8n.cloud/webhook/leads_form";
+const SLOTS_URL   = "https://dariikk.app.n8n.cloud/webhook/slots_ocupados";
 
 const INTEREST_OPTIONS = [
   { value: "comprar", label: "Comprar" },
   { value: "alquilar", label: "Alquilar" },
 ];
 
-// Horarios disponibles (ajusta según tu disponibilidad real)
 const TIME_SLOTS = [
   "09:00", "09:30", "10:00", "10:30",
   "11:00", "11:30", "12:00", "12:30",
   "16:00", "16:30", "17:00", "17:30",
 ];
 
-// Días de la semana deshabilitados (0 = domingo, 6 = sábado)
 const DISABLED_WEEKDAYS = [0, 6];
 
 const MONTHS = [
@@ -57,16 +56,23 @@ const initialForm: FormData = {
   urgencia: "",
 };
 
-// ── Calendario ──────────────────────────────────
+// ── Helpers ─────────────────────────────────────
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
 }
 
 function getFirstWeekday(year: number, month: number) {
   const dow = new Date(year, month, 1).getDay();
-  return dow === 0 ? 6 : dow - 1; // semana empieza en lunes
+  return dow === 0 ? 6 : dow - 1;
 }
 
+function toDateStr(date: Date) {
+  return date.toLocaleDateString("es-ES", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+  }); // dd/mm/yyyy
+}
+
+// ── Calendario ──────────────────────────────────
 interface CalendarProps {
   selected: Date | null;
   onSelect: (date: Date) => void;
@@ -107,41 +113,23 @@ function Calendar({ selected, onSelect }: CalendarProps) {
 
   return (
     <div className="border rounded-xl overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-muted border-b">
-        <button
-          type="button"
-          onClick={prevMonth}
-          className="p-1 rounded-md hover:bg-background border text-muted-foreground"
-        >
+        <button type="button" onClick={prevMonth} className="p-1 rounded-md hover:bg-background border text-muted-foreground">
           <ChevronLeft className="w-4 h-4" />
         </button>
-        <span className="text-sm font-medium">
-          {MONTHS[viewMonth]} {viewYear}
-        </span>
-        <button
-          type="button"
-          onClick={nextMonth}
-          className="p-1 rounded-md hover:bg-background border text-muted-foreground"
-        >
+        <span className="text-sm font-medium">{MONTHS[viewMonth]} {viewYear}</span>
+        <button type="button" onClick={nextMonth} className="p-1 rounded-md hover:bg-background border text-muted-foreground">
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Grid */}
       <div className="grid grid-cols-7 gap-0 p-3">
         {WEEKDAYS.map(d => (
-          <div key={d} className="text-center text-[11px] text-muted-foreground py-1 pb-2 font-medium">
-            {d}
-          </div>
+          <div key={d} className="text-center text-[11px] text-muted-foreground py-1 pb-2 font-medium">{d}</div>
         ))}
         {cells.map((cell, i) => {
           if (cell.type !== "curr" || !cell.date) {
-            return (
-              <div key={i} className="text-center py-1.5 text-xs text-muted-foreground/40">
-                {cell.day}
-              </div>
-            );
+            return <div key={i} className="text-center py-1.5 text-xs text-muted-foreground/40">{cell.day}</div>;
           }
           const date = cell.date;
           date.setHours(0, 0, 0, 0);
@@ -182,32 +170,87 @@ interface TimeSlotsProps {
 }
 
 function TimeSlots({ date, selected, onSelect }: TimeSlotsProps) {
+  const [ocupados, setOcupados] = useState<string[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+
   const dateLabel = date.toLocaleDateString("es-ES", {
     weekday: "long", day: "numeric", month: "long",
   });
 
+  // Consulta al webhook cada vez que cambia la fecha
+  useEffect(() => {
+    let cancelled = false;
+    setOcupados([]);
+    setLoadingSlots(true);
+
+    const fechaStr = toDateStr(date);
+
+    fetch(`${SLOTS_URL}?fecha=${encodeURIComponent(fechaStr)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (cancelled) return;
+        // El webhook devuelve { ocupados: ["09:00", "10:30", ...] }
+        setOcupados(Array.isArray(data.ocupados) ? data.ocupados : []);
+      })
+      .catch(() => {
+        if (!cancelled) setOcupados([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSlots(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [date]);
+
   return (
     <div className="mt-4">
-      <p className="text-sm text-muted-foreground mb-2">
-        Horarios disponibles para el{" "}
-        <span className="text-foreground font-medium">{dateLabel}</span>
-      </p>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm text-muted-foreground">
+          Horarios disponibles para el{" "}
+          <span className="text-foreground font-medium">{dateLabel}</span>
+        </p>
+        {loadingSlots && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+      </div>
+
       <div className="grid grid-cols-4 gap-2">
-        {TIME_SLOTS.map(slot => (
-          <button
-            key={slot}
-            type="button"
-            onClick={() => onSelect(slot)}
-            className={cn(
-              "py-2 text-sm rounded-md border transition-colors",
-              selected === slot
-                ? "bg-foreground text-background border-foreground font-medium"
-                : "border-border hover:bg-muted",
-            )}
-          >
-            {slot}
-          </button>
-        ))}
+        {TIME_SLOTS.map(slot => {
+          const isOcupado = ocupados.includes(slot);
+          const isSelected = selected === slot;
+
+          return (
+            <button
+              key={slot}
+              type="button"
+              disabled={isOcupado || loadingSlots}
+              onClick={() => !isOcupado && onSelect(slot)}
+              className={cn(
+                "py-2 text-sm rounded-md border transition-colors relative",
+                isOcupado && "border-border bg-muted text-muted-foreground/40 cursor-not-allowed line-through",
+                !isOcupado && !isSelected && "border-border hover:bg-muted cursor-pointer",
+                isSelected && "bg-foreground text-background border-foreground font-medium",
+              )}
+            >
+              {slot}
+              {isOcupado && (
+                <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 text-[9px] bg-muted text-muted-foreground/60 px-1 rounded">
+                  ocupado
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Leyenda */}
+      <div className="flex items-center gap-4 mt-3">
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded border border-border bg-background" />
+          <span className="text-xs text-muted-foreground">Disponible</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded border border-border bg-muted" />
+          <span className="text-xs text-muted-foreground">Ocupado</span>
+        </div>
       </div>
     </div>
   );
@@ -226,16 +269,13 @@ const LeadForm = () => {
 
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
-    setSelectedSlot(null); // reset slot al cambiar día
+    setSelectedSlot(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (
-      !form.nombre.trim() || !form.email.trim() || !form.telefono.trim() ||
-      !form.interes || !form.urgencia.trim()
-    ) {
+    if (!form.nombre.trim() || !form.email.trim() || !form.telefono.trim() || !form.interes || !form.urgencia.trim()) {
       toast.error("Por favor, completa todos los campos.");
       return;
     }
@@ -258,9 +298,7 @@ const LeadForm = () => {
       return;
     }
 
-    const fechaStr = selectedDate.toLocaleDateString("es-ES", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-    });
+    const fechaStr = toDateStr(selectedDate);
 
     setLoading(true);
     try {
@@ -278,9 +316,7 @@ const LeadForm = () => {
         }),
       });
 
-      toast.success(
-        `¡Cita confirmada para el ${fechaStr} a las ${selectedSlot}! Nos pondremos en contacto pronto.`,
-      );
+      toast.success(`¡Cita confirmada para el ${fechaStr} a las ${selectedSlot}! Nos pondremos en contacto pronto.`);
       setForm(initialForm);
       setSelectedDate(null);
       setSelectedSlot(null);
@@ -293,51 +329,26 @@ const LeadForm = () => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Nombre completo */}
       <div className="space-y-2">
         <Label htmlFor="nombre">Nombre completo</Label>
-        <Input
-          id="nombre"
-          placeholder="Ej: María García López"
-          value={form.nombre}
-          onChange={e => handleChange("nombre", e.target.value)}
-          maxLength={100}
-        />
+        <Input id="nombre" placeholder="Ej: María García López" value={form.nombre} onChange={e => handleChange("nombre", e.target.value)} maxLength={100} />
       </div>
 
-      {/* Email */}
       <div className="space-y-2">
         <Label htmlFor="email">Correo electrónico</Label>
-        <Input
-          id="email"
-          type="email"
-          placeholder="tu@email.com"
-          value={form.email}
-          onChange={e => handleChange("email", e.target.value)}
-          maxLength={255}
-        />
+        <Input id="email" type="email" placeholder="tu@email.com" value={form.email} onChange={e => handleChange("email", e.target.value)} maxLength={255} />
       </div>
 
-      {/* Teléfono */}
       <div className="space-y-2">
         <Label htmlFor="telefono">Teléfono</Label>
         <div className="flex items-center gap-2">
           <span className="flex h-10 items-center rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground">
             🇪🇸 +34
           </span>
-          <Input
-            id="telefono"
-            type="tel"
-            placeholder="612 345 678"
-            value={form.telefono}
-            onChange={e => handleChange("telefono", e.target.value)}
-            maxLength={15}
-            className="flex-1"
-          />
+          <Input id="telefono" type="tel" placeholder="612 345 678" value={form.telefono} onChange={e => handleChange("telefono", e.target.value)} maxLength={15} className="flex-1" />
         </div>
       </div>
 
-      {/* Interés */}
       <div className="space-y-2">
         <Label htmlFor="interes">¿Qué te interesa?</Label>
         <Select value={form.interes} onValueChange={v => handleChange("interes", v)}>
@@ -346,48 +357,26 @@ const LeadForm = () => {
           </SelectTrigger>
           <SelectContent>
             {INTEREST_OPTIONS.map(opt => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
+              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
-      {/* Urgencia */}
       <div className="space-y-2">
         <Label htmlFor="urgencia">Urgencia</Label>
-        <Textarea
-          id="urgencia"
-          placeholder="Cuéntanos brevemente tu situación y plazos..."
-          value={form.urgencia}
-          onChange={e => handleChange("urgencia", e.target.value)}
-          maxLength={300}
-          className="min-h-[80px] resize-none"
-        />
+        <Textarea id="urgencia" placeholder="Cuéntanos brevemente tu situación y plazos..." value={form.urgencia} onChange={e => handleChange("urgencia", e.target.value)} maxLength={300} className="min-h-[80px] resize-none" />
       </div>
 
-      {/* ── Selector de cita ── */}
       <div className="space-y-2 pt-1">
         <Label>Elige el día para tu cita</Label>
         <Calendar selected={selectedDate} onSelect={handleDateSelect} />
         {selectedDate && (
-          <TimeSlots
-            date={selectedDate}
-            selected={selectedSlot}
-            onSelect={setSelectedSlot}
-          />
+          <TimeSlots date={selectedDate} selected={selectedSlot} onSelect={setSelectedSlot} />
         )}
       </div>
 
-      {/* Submit */}
-      <Button
-        type="submit"
-        variant="hero"
-        size="lg"
-        className="w-full"
-        disabled={loading || !selectedDate || !selectedSlot}
-      >
+      <Button type="submit" variant="hero" size="lg" className="w-full" disabled={loading || !selectedDate || !selectedSlot}>
         {loading ? <Loader2 className="animate-spin" /> : <Send />}
         {loading ? "Enviando..." : "Confirmar cita"}
       </Button>
