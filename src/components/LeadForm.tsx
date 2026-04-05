@@ -372,7 +372,7 @@ const LeadForm = () => {
         <Label htmlFor="urgencia">Urgencia</Label>
         <Select value={form.urgencia} onValueChange={v => handleChange("urgencia", v)}>
           <SelectTrigger id="urgencia">
-            <SelectValue placeholder="Selecciona una opción" />
+            <SelectValue placeholder="Cual es tu urgencia?" />
           </SelectTrigger>
           <SelectContent>
             {URGENCY_OPTIONS.map(opt => (
