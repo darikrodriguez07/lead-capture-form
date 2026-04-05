@@ -24,6 +24,11 @@ const INTEREST_OPTIONS = [
   { value: "comprar", label: "Comprar" },
   { value: "alquilar", label: "Alquilar" },
 ];
+const URGENCY_OPTIONS = [
+  {value: "baja", label: "Baja"},
+  {value: "media", label: "Media"},
+  {value: "alta", label: "Alta"},
+];
 
 const TIME_SLOTS = [
   "09:00", "09:30", "10:00", "10:30",
@@ -365,7 +370,16 @@ const LeadForm = () => {
 
       <div className="space-y-2">
         <Label htmlFor="urgencia">Urgencia</Label>
-        <Textarea id="urgencia" placeholder="Cuéntanos brevemente tu situación y plazos..." value={form.urgencia} onChange={e => handleChange("urgencia", e.target.value)} maxLength={300} className="min-h-[80px] resize-none" />
+        <Select value={form.urgencia} onValueChange={v => handleChange("urgencia", v)}>
+          <SelectTrigger id="urgencia">
+            <SelectValue placeholder="Selecciona una opción" />
+          </SelectTrigger>
+          <SelectContent>
+            {URGENCY_OPTIONS.map(opt => (
+              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="space-y-2 pt-1">
