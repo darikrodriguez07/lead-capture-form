@@ -25,9 +25,9 @@ const INTEREST_OPTIONS = [
   { value: "Alquilar", label: "Alquilar" },
 ];
 const URGENCY_OPTIONS = [
-  {value: "baja", label: "Baja"},
-  {value: "media", label: "Media"},
-  {value: "alta", label: "Alta"},
+  {value: "Baja", label: "Baja"},
+  {value: "Media", label: "Media"},
+  {value: "Alta", label: "Alta"},
 ];
 
 const TIME_SLOTS = [
