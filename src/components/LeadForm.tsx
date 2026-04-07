@@ -21,8 +21,8 @@ const WEBHOOK_URL = "https://dariikk.app.n8n.cloud/webhook/leads_form";
 const SLOTS_URL   = "https://dariikk.app.n8n.cloud/webhook/slots_ocupados";
 
 const INTEREST_OPTIONS = [
-  { value: "COMPRAR", label: "Comprar" },
-  { value: "ALQUILAR", label: "Alquilar" },
+  { value: "Comprar", label: "Comprar" },
+  { value: "Alquilar", label: "Alquilar" },
 ];
 const URGENCY_OPTIONS = [
   {value: "baja", label: "Baja"},
