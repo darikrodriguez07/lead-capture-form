@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -25,9 +24,9 @@ const INTEREST_OPTIONS = [
   { value: "Alquilar", label: "Alquilar" },
 ];
 const URGENCY_OPTIONS = [
-  {value: "Baja", label: "Baja"},
-  {value: "Media", label: "Media"},
-  {value: "Alta", label: "Alta"},
+  { value: "Baja", label: "Baja" },
+  { value: "Media", label: "Media" },
+  { value: "Alta", label: "Alta" },
 ];
 
 const TIME_SLOTS = [
@@ -74,7 +73,13 @@ function getFirstWeekday(year: number, month: number) {
 function toDateStr(date: Date) {
   return date.toLocaleDateString("es-ES", {
     day: "2-digit", month: "2-digit", year: "numeric",
-  }); // dd/mm/yyyy
+  });
+}
+
+// ── Leer parámetros de la URL ────────────────────
+function getUrlParam(name: string): string {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(name) ?? "";
 }
 
 // ── Calendario ──────────────────────────────────
@@ -172,9 +177,10 @@ interface TimeSlotsProps {
   date: Date;
   selected: string | null;
   onSelect: (slot: string) => void;
+  clientId: string;
 }
 
-function TimeSlots({ date, selected, onSelect }: TimeSlotsProps) {
+function TimeSlots({ date, selected, onSelect, clientId }: TimeSlotsProps) {
   const [ocupados, setOcupados] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
 
@@ -182,7 +188,6 @@ function TimeSlots({ date, selected, onSelect }: TimeSlotsProps) {
     weekday: "long", day: "numeric", month: "long",
   });
 
-  // Consulta al webhook cada vez que cambia la fecha
   useEffect(() => {
     let cancelled = false;
     setOcupados([]);
@@ -190,11 +195,11 @@ function TimeSlots({ date, selected, onSelect }: TimeSlotsProps) {
 
     const fechaStr = toDateStr(date);
 
-    fetch(`${SLOTS_URL}?fecha=${encodeURIComponent(fechaStr)}`)
+    // Se envía client_id para que n8n sepa de qué cliente consultar los slots
+    fetch(`${SLOTS_URL}?fecha=${encodeURIComponent(fechaStr)}&client_id=${encodeURIComponent(clientId)}`)
       .then(res => res.json())
       .then(data => {
         if (cancelled) return;
-        // El webhook devuelve { ocupados: ["09:00", "10:30", ...] }
         setOcupados(Array.isArray(data.ocupados) ? data.ocupados : []);
       })
       .catch(() => {
@@ -205,7 +210,7 @@ function TimeSlots({ date, selected, onSelect }: TimeSlotsProps) {
       });
 
     return () => { cancelled = true; };
-  }, [date]);
+  }, [date, clientId]);
 
   return (
     <div className="mt-4">
@@ -246,7 +251,6 @@ function TimeSlots({ date, selected, onSelect }: TimeSlotsProps) {
         })}
       </div>
 
-      {/* Leyenda */}
       <div className="flex items-center gap-4 mt-3">
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded border border-border bg-background" />
@@ -267,6 +271,10 @@ const LeadForm = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // ── MULTI-TENANT: leer client_id de la URL ──
+  // Ejemplo de URL: https://tuform.com?client_id=inmo_x
+  const clientId = getUrlParam("client_id");
 
   const handleChange = (field: keyof FormData, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -303,6 +311,11 @@ const LeadForm = () => {
       return;
     }
 
+    if (!clientId) {
+      toast.error("URL incorrecta. Contacta con tu asesor.");
+      return;
+    }
+
     const fechaStr = toDateStr(selectedDate);
 
     setLoading(true);
@@ -311,6 +324,7 @@ const LeadForm = () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          client_id: clientId,           // ← NUEVO: identifica la inmobiliaria
           nombre_completo: form.nombre.trim(),
           email: form.email.trim(),
           telefono: phoneClean,
@@ -372,7 +386,7 @@ const LeadForm = () => {
         <Label htmlFor="urgencia">Urgencia</Label>
         <Select value={form.urgencia} onValueChange={v => handleChange("urgencia", v)}>
           <SelectTrigger id="urgencia">
-            <SelectValue placeholder="Cual es tu urgencia?" />
+            <SelectValue placeholder="¿Cuál es tu urgencia?" />
           </SelectTrigger>
           <SelectContent>
             {URGENCY_OPTIONS.map(opt => (
@@ -386,7 +400,12 @@ const LeadForm = () => {
         <Label>Elige el día para tu cita</Label>
         <Calendar selected={selectedDate} onSelect={handleDateSelect} />
         {selectedDate && (
-          <TimeSlots date={selectedDate} selected={selectedSlot} onSelect={setSelectedSlot} />
+          <TimeSlots
+            date={selectedDate}
+            selected={selectedSlot}
+            onSelect={setSelectedSlot}
+            clientId={clientId}
+          />
         )}
       </div>
 
