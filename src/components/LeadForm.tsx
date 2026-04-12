@@ -16,8 +16,15 @@ import { cn } from "@/lib/utils";
 /* ──────────────────────────────────────────────
    CONFIG
    ────────────────────────────────────────────── */
-const WEBHOOK_URL = "https://dariikk.app.n8n.cloud/webhook/leads_form";
-const SLOTS_URL   = "https://dariikk.app.n8n.cloud/webhook/slots_ocupados";
+const plan = getUrlParam("plan");
+
+const WEBHOOK_URL = plan === "core"
+  ? "https://dariikk.app.n8n.cloud/webhook/leads_form_core"
+  : "https://dariikk.app.n8n.cloud/webhook/leads_form_starter";
+
+const SLOTS_URL = plan === "core"
+  ? "https://dariikk.app.n8n.cloud/webhook/slots_ocupados_core"
+  : "https://dariikk.app.n8n.cloud/webhook/slots_ocupados_starter";
 
 const INTEREST_OPTIONS = [
   { value: "Comprar", label: "Comprar" },
